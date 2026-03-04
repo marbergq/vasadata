@@ -499,7 +499,7 @@ st.caption("Shows how returning participants moved between start groups from one
 
 # Seeding thresholds (max finish time to qualify for each start group)
 seeding_thresholds = {
-    2026: {
+    2027: {
         "Elit": "4:34:04", "1": "5:12:40", "2": "5:42:04", "3": "6:44:54",
         "4": "7:51:38", "5": "8:47:09", "6": "9:33:34", "7": "10:22:03",
         "8": "11:31:38", "9": "13:23:00",
