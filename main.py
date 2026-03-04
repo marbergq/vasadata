@@ -588,6 +588,30 @@ else:
     with sankey_cols[1]:
         st.info("No returning participants found between these years.")
 
+# Breakdown table: select a source start group and see where they ended up
+if not flow_counts.empty:
+    st.write("#### Start Group Breakdown")
+    breakdown_cols = st.columns([1, 3])
+    with breakdown_cols[0]:
+        available_sgs = sorted(flow_counts.sg_from.unique(), key=lambda x: sg_order.index(x) if x in sg_order else 99)
+        selected_sg = st.selectbox(
+            f"Source start group ({selected_pair[0]})",
+            available_sgs,
+            format_func=lambda x: f"Group {x}" if x != "Elit" else "Elit",
+        )
+
+    sg_data = flow_counts[flow_counts.sg_from == selected_sg].copy()
+    total = sg_data["count"].sum()
+    sg_data["Percentage"] = (sg_data["count"] / total * 100).round(1)
+    sg_data = sg_data.sort_values("sg_to", key=lambda s: s.map({sg: i for i, sg in enumerate(sg_order)}))
+    sg_data = sg_data.rename(columns={"sg_to": f"Start Group {selected_pair[1]}", "count": "Participants"})
+    sg_data = sg_data[[f"Start Group {selected_pair[1]}", "Participants", "Percentage"]].reset_index(drop=True)
+    sg_data["Percentage"] = sg_data["Percentage"].apply(lambda x: f"{x}%")
+
+    with breakdown_cols[1]:
+        st.caption(f"**{total}** returning participants from group **{selected_sg}** in {selected_pair[0]}")
+        st.dataframe(sg_data, hide_index=True, use_container_width=True)
+
 st.divider()
 ## Individual Year over Year Analysis
 # Pickers and Headers.
