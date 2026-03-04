@@ -564,8 +564,12 @@ if not flow_counts.empty:
             targets.append(tgt)
             values.append(row["count"])
             # Colour the link by the source group, with transparency
-            base = colors[src % len(colors)].lstrip("#")
-            r, g, b = int(base[:2], 16), int(base[2:4], 16), int(base[4:6], 16)
+            c = colors[src % len(colors)]
+            if c.startswith("rgb("):
+                r, g, b = [int(x) for x in c[4:-1].split(",")]
+            else:
+                base = c.lstrip("#")
+                r, g, b = int(base[:2], 16), int(base[2:4], 16), int(base[4:6], 16)
             link_colors.append(f"rgba({r},{g},{b},0.35)")
 
     fig = go.Figure(go.Sankey(
