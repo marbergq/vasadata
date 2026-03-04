@@ -618,13 +618,22 @@ def _time_to_seconds(t):
     parts = t.split(":")
     return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
 
-# Find which seeding table applies to the "from" year (i.e. from_year finish → from_year+1 seeding)
-seeding_target_year = selected_pair[0] + 1
-if seeding_target_year in seeding_thresholds:
+# Find years where we have both finish data and seeding thresholds for the next year
+seeding_source_years = [y for y in sorted(df_full.year.unique()) if (y + 1) in seeding_thresholds]
+if seeding_source_years:
     st.write("#### Projected Seeding from Finish Times")
-    st.caption(f"Based on {selected_pair[0]} finish times and {seeding_target_year} seeding thresholds — where would each start group be seeded next year?")
+    st.caption("Select a year and start group to see where finishers would be seeded next year based on the seeding thresholds.")
 
-    # Build ordered thresholds in seconds
+    seed_cols = st.columns([1, 1, 2])
+    with seed_cols[0]:
+        seed_year = st.selectbox(
+            "Race year",
+            seeding_source_years,
+            index=len(seeding_source_years) - 1,
+            key="seeding_year",
+        )
+
+    seeding_target_year = seed_year + 1
     seed_order = [sg for sg in sg_order if sg in seeding_thresholds[seeding_target_year]]
     seed_limits = [(sg, _time_to_seconds(seeding_thresholds[seeding_target_year][sg])) for sg in seed_order]
 
@@ -634,17 +643,15 @@ if seeding_target_year in seeding_thresholds:
                 return sg
         return "10+"
 
-    # Get finishers from the "from" year
-    df_finishers = df_full[(df_full.year == selected_pair[0]) & (df_full.control == "Finish")].copy()
+    df_finishers = df_full[(df_full.year == seed_year) & (df_full.control == "Finish")].copy()
 
-    seed_cols = st.columns([1, 3])
-    with seed_cols[0]:
+    with seed_cols[1]:
         available_sgs_seed = sorted(
             df_finishers.startgroup.unique(),
             key=lambda x: sg_order.index(x) if x in sg_order else 99,
         )
         selected_sg_seed = st.selectbox(
-            f"Start group in {selected_pair[0]}",
+            f"Start group in {seed_year}",
             available_sgs_seed,
             format_func=lambda x: f"Group {x}" if x != "Elit" else "Elit",
             key="seeding_sg",
@@ -654,15 +661,14 @@ if seeding_target_year in seeding_thresholds:
     df_sg["Projected Group"] = df_sg.duration_s.apply(classify_seeding)
 
     seed_counts = df_sg.groupby("Projected Group").size().reset_index(name="Participants")
-    # Sort by startgroup order
     all_groups = seed_order + ["10+"]
     seed_counts["_sort"] = seed_counts["Projected Group"].map({sg: i for i, sg in enumerate(all_groups)})
     seed_counts = seed_counts.sort_values("_sort").drop(columns="_sort")
     total_seed = seed_counts["Participants"].sum()
     seed_counts["Percentage"] = (seed_counts["Participants"] / total_seed * 100).round(1).apply(lambda x: f"{x}%")
 
-    with seed_cols[1]:
-        st.caption(f"**{total_seed}** finishers from group **{selected_sg_seed}** in {selected_pair[0]} → projected {seeding_target_year} seeding")
+    with seed_cols[2]:
+        st.caption(f"**{total_seed}** finishers from group **{selected_sg_seed}** in {seed_year} → projected {seeding_target_year} seeding")
         st.dataframe(seed_counts, hide_index=True, use_container_width=True)
 
 st.divider()
