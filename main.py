@@ -499,7 +499,7 @@ st.caption("Shows how returning participants moved between start groups from one
 
 # Seeding thresholds (max finish time to qualify for each start group)
 seeding_thresholds = {
-    2026: {
+    2027: {
         "Elit": "4:34:04", "1": "5:12:40", "2": "5:42:04", "3": "6:44:54",
         "4": "7:51:38", "5": "8:47:09", "6": "9:33:34", "7": "10:22:03",
         "8": "11:31:38", "9": "13:23:00",
@@ -587,6 +587,30 @@ if not flow_counts.empty:
 else:
     with sankey_cols[1]:
         st.info("No returning participants found between these years.")
+
+# Breakdown table: select a source start group and see where they ended up
+if not flow_counts.empty:
+    st.write("#### Start Group Breakdown")
+    breakdown_cols = st.columns([1, 3])
+    with breakdown_cols[0]:
+        available_sgs = sorted(flow_counts.sg_from.unique(), key=lambda x: sg_order.index(x) if x in sg_order else 99)
+        selected_sg = st.selectbox(
+            f"Source start group ({selected_pair[0]})",
+            available_sgs,
+            format_func=lambda x: f"Group {x}" if x != "Elit" else "Elit",
+        )
+
+    sg_data = flow_counts[flow_counts.sg_from == selected_sg].copy()
+    total = sg_data["count"].sum()
+    sg_data["Percentage"] = (sg_data["count"] / total * 100).round(1)
+    sg_data = sg_data.sort_values("sg_to", key=lambda s: s.map({sg: i for i, sg in enumerate(sg_order)}))
+    sg_data = sg_data.rename(columns={"sg_to": f"Start Group {selected_pair[1]}", "count": "Participants"})
+    sg_data = sg_data[[f"Start Group {selected_pair[1]}", "Participants", "Percentage"]].reset_index(drop=True)
+    sg_data["Percentage"] = sg_data["Percentage"].apply(lambda x: f"{x}%")
+
+    with breakdown_cols[1]:
+        st.caption(f"**{total}** returning participants from group **{selected_sg}** in {selected_pair[0]}")
+        st.dataframe(sg_data, hide_index=True, use_container_width=True)
 
 st.divider()
 ## Individual Year over Year Analysis
