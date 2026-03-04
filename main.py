@@ -493,6 +493,97 @@ with cols[1]:
 
     st.plotly_chart(fig, width='stretch', config=plotly_config)
 
+# --- Start Group Flow (Sankey) ---
+st.write("#### Start Group Flow Between Years")
+st.caption("Shows how returning participants moved between start groups from one year to the next — like a user-flow in web analytics.")
+
+# Seeding thresholds (max finish time to qualify for each start group)
+seeding_thresholds = {
+    2026: {
+        "Elit": "4:34:04", "1": "5:12:40", "2": "5:42:04", "3": "6:44:54",
+        "4": "7:51:38", "5": "8:47:09", "6": "9:33:34", "7": "10:22:03",
+        "8": "11:31:38", "9": "13:23:00",
+    },
+}
+
+@st.cache_data
+def compute_startgroup_flow(df_full, year_from, year_to, sg_order):
+    """Count how many returning participants moved between start groups."""
+    df_p = df_full.drop_duplicates(subset=["year", "name"])[["year", "name", "startgroup"]]
+    df_from = df_p[df_p.year == year_from][["name", "startgroup"]].rename(columns={"startgroup": "sg_from"})
+    df_to = df_p[df_p.year == year_to][["name", "startgroup"]].rename(columns={"startgroup": "sg_to"})
+    df_flow = df_from.merge(df_to, on="name")
+    flow_counts = df_flow.groupby(["sg_from", "sg_to"]).size().reset_index(name="count")
+    # Filter to known start groups
+    flow_counts = flow_counts[flow_counts.sg_from.isin(sg_order) & flow_counts.sg_to.isin(sg_order)]
+    return flow_counts
+
+years_sorted = sorted(df_full.year.unique())
+year_pairs = [(years_sorted[i], years_sorted[i + 1]) for i in range(len(years_sorted) - 1)]
+
+sankey_cols = st.columns([1, 3])
+with sankey_cols[0]:
+    selected_pair = st.selectbox(
+        "Year transition",
+        year_pairs,
+        index=len(year_pairs) - 1,
+        format_func=lambda x: f"{x[0]} → {x[1]}",
+    )
+    show_seeding = False
+    if selected_pair[1] in seeding_thresholds:
+        show_seeding = st.checkbox("Show seeding thresholds", value=True)
+        if show_seeding:
+            st.write(f"**Seeding for {selected_pair[1]}**")
+            seed_df = pd.DataFrame(
+                [(sg, t) for sg, t in seeding_thresholds[selected_pair[1]].items()],
+                columns=["Group", "Max Finish Time"],
+            )
+            st.dataframe(seed_df, hide_index=True, height=390)
+
+sg_order = [sg for sg in startgroups if sg in df_full.startgroup.cat.categories]
+flow_counts = compute_startgroup_flow(df_full, selected_pair[0], selected_pair[1], sg_order)
+
+if not flow_counts.empty:
+    # Build Sankey nodes: left side = "2024 Elit", right side = "2025 Elit", etc.
+    left_labels = [f"{selected_pair[0]} {sg}" for sg in sg_order]
+    right_labels = [f"{selected_pair[1]} {sg}" for sg in sg_order]
+    all_labels = left_labels + right_labels
+
+    sg_to_left_idx = {sg: i for i, sg in enumerate(sg_order)}
+    sg_to_right_idx = {sg: i + len(sg_order) for i, sg in enumerate(sg_order)}
+
+    colors = px.colors.qualitative.Set3
+    node_colors = [colors[i % len(colors)] for i in range(len(all_labels))]
+
+    sources, targets, values, link_colors = [], [], [], []
+    for _, row in flow_counts.iterrows():
+        src = sg_to_left_idx.get(row.sg_from)
+        tgt = sg_to_right_idx.get(row.sg_to)
+        if src is not None and tgt is not None:
+            sources.append(src)
+            targets.append(tgt)
+            values.append(row["count"])
+            # Colour the link by the source group, with transparency
+            base = colors[src % len(colors)].lstrip("#")
+            r, g, b = int(base[:2], 16), int(base[2:4], 16), int(base[4:6], 16)
+            link_colors.append(f"rgba({r},{g},{b},0.35)")
+
+    fig = go.Figure(go.Sankey(
+        node=dict(pad=15, thickness=20, label=all_labels, color=node_colors),
+        link=dict(source=sources, target=targets, value=values, color=link_colors),
+    ))
+    fig.update_layout(
+        title_text=f"Start Group Flow: {selected_pair[0]} → {selected_pair[1]}",
+        font_size=12,
+        height=500,
+    )
+
+    with sankey_cols[1]:
+        st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+else:
+    with sankey_cols[1]:
+        st.info("No returning participants found between these years.")
+
 st.divider()
 ## Individual Year over Year Analysis
 # Pickers and Headers.
